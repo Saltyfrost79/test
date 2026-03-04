@@ -5,7 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 local inventory = LP:WaitForChild("DoodleInv")
-local mergeRemote = Workspace.Lab.Crushinator.RemoteEvent
+local mergeRemote = Workspace.Map.Lab.Crushinator.RemoteEvent
 
 -- 1. Create the Window
 local Window = Rayfield:CreateWindow({
