@@ -9,7 +9,7 @@ local mergeRemote = workspace.Lab.Crushinator.RemoteEvent
 
 -- 1. Create the Window
 local Window = Rayfield:CreateWindow({
-   Name = "AniPixels",
+   Name = "AniPixels | Delta Edition",
    LoadingTitle = "Loading Script Hub...",
    LoadingSubtitle = "by Average",
    ConfigurationSaving = { Enabled = false }
