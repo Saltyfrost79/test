@@ -1,70 +1,97 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Setup Constants
+-- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
-local inventory = LP:WaitForChild("DoodleInv")
-local mergeRemote = Workspace.Map.Lab.Crushinator.RemoteEvent
 
 -- 1. Create the Window
 local Window = Rayfield:CreateWindow({
-   Name = "AniPixels",
-   LoadingTitle = "Loading Script Hub...",
+   Name = "AniPixels | Average Hub",
+   LoadingTitle = "Delta Interface",
    LoadingSubtitle = "by Average",
    ConfigurationSaving = { Enabled = false }
 })
 
--- 2. Create the Tab
-local MainTab = Window:CreateTab("Automation", 4483362458) -- Icon ID optional
+local MainTab = Window:CreateTab("Automation")
 
--- Function to find units
-local function getMergeableUnit()
+-- Function to safely find the Merge Remote using a recursive search
+local function getMergeRemote()
+    return workspace:FindFirstChild("RemoteEvent", true) -- Searches everywhere for it
+end
+
+local function runMergeProcess()
+    local char = LP.Character or LP.CharacterAdded:Wait()
+    local root = char:WaitForChild("HumanoidRootPart")
+    local inventory = LP:WaitForChild("DoodleInv")
+    
+    -- Find units to merge
     local counts = {}
+    local targetName = nil
     for _, item in pairs(inventory:GetChildren()) do
-        local name = item.Name
-        counts[name] = (counts[name] or 0) + 1
-        if counts[name] >= 4 then
-            return name
+        counts[item.Name] = (counts[item.Name] or 0) + 1
+        if counts[item.Name] >= 4 then
+            targetName = item.Name
+            break
         end
     end
-    return nil
-end
 
--- Function to perform the merge
-local function runMergeProcess()
-    local unitName = getMergeableUnit()
-    if unitName then
-        local tpArgs = {[1] = CFrame.new(311.89, 34.42, -190.07) * CFrame.Angles(0, 1.57, 0)}
+    if targetName then
+        -- 1. FIX: Teleport using PivotTo (more reliable than just firing the remote sometimes)
+        -- We still fire the remote because the server needs to know you "traveled"
+        local tpPos = CFrame.new(311.89, 34.42, -190.07) * CFrame.Angles(0, 1.57, 0)
+        
+        -- Force your character to move locally first so the server accepts the remote
+        char:PivotTo(tpPos) 
+        
+        local tpArgs = {[1] = tpPos}
         ReplicatedStorage.Events.Teleport:FireServer(unpack(tpArgs))
+        task.wait(1.5) -- Increased wait for server-side position sync
+
+        -- 2. Equip 4 copies
+        local squadArgs = {
+            [1] = {
+                ["1"] = targetName,
+                ["2"] = targetName,
+                ["3"] = targetName,
+                ["4"] = targetName
+            }
+        }
+        ReplicatedStorage.Events.SquadUpdate:FireServer(unpack(squadArgs))
         task.wait(1)
 
-        local squadArgs = {[1] = {["1"] = unitName, ["2"] = unitName, ["3"] = unitName, ["4"] = unitName}}
-        ReplicatedStorage.Events.SquadUpdate:FireServer(unpack(squadArgs))
-        task.wait(0.5)
-
-        mergeRemote:FireServer()
-        Rayfield:Notify({Title = "Success", Content = "Merged: " .. unitName, Duration = 3})
+        -- 3. Merge
+        local remote = getMergeRemote()
+        if remote then
+            remote:FireServer()
+            Rayfield:Notify({Title = "Success", Content = "Attempted merge: "..targetName, Duration = 3})
+        else
+            Rayfield:Notify({Title = "Error", Content = "Remote not found!", Duration = 3})
+        end
+    else
+        Rayfield:Notify({Title = "Notice", Content = "No 4x duplicates found.", Duration = 2})
     end
 end
 
--- 3. Add UI Elements
-MainTab:CreateButton({
-   Name = "Merge Once",
-   Callback = function()
-      runMergeProcess()
-   end,
-})
-
+-- UI Elements
 MainTab:CreateToggle({
    Name = "Auto-Merge Loop",
    CurrentValue = false,
-   Flag = "Toggle1", 
    Callback = function(Value)
       _G.AutoMerge = Value
-      while _G.AutoMerge do
-         runMergeProcess()
-         task.wait(5) -- Checks every 5 seconds
-      end
+      -- Use task.spawn so the loop doesn't "lock" the rest of the script
+      task.spawn(function()
+          while _G.AutoMerge do
+             runMergeProcess()
+             task.wait(10) -- Slowed down to prevent "Anti-Cheat" kicks
+          end
+      end)
+   end,
+})
+
+MainTab:CreateButton({
+   Name = "Manual Merge Test",
+   Callback = function()
+      runMergeProcess()
    end,
 })
