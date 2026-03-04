@@ -1,0 +1,24 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "My First Delta Script",
+   LoadingTitle = "Delta Interface",
+   LoadingSubtitle = "by YourName",
+})
+
+local Tab = Window:CreateTab("Main Features") -- Creates a tab
+
+-- This creates a Toggle
+local Toggle = Tab:CreateToggle({
+   Name = "Infinite Jump",
+   CurrentValue = false,
+   Callback = function(Value)
+      -- This code runs when you flip the switch
+      _G.InfJump = Value
+      game:GetService("UserInputService").JumpRequest:Connect(function()
+          if _G.InfJump then
+              game:GetService"Players".LocalPlayer.Character:FindFirstChildOfClass('Humanoid'):ChangeState("Jumping")
+          end
+      end)
+   end,
+})
