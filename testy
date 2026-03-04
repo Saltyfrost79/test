@@ -1,7 +1,7 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "My First Delta Script",
+   Name = "Johnnyyyyy",
    LoadingTitle = "Delta Interface",
    LoadingSubtitle = "by YourName",
 })
