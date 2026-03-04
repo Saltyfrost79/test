@@ -1,24 +1,70 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
+-- Setup Constants
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer
+local inventory = LP:WaitForChild("DoodleInv")
+local mergeRemote = workspace.Lab.Crushinator.RemoteEvent
+
+-- 1. Create the Window
 local Window = Rayfield:CreateWindow({
-   Name = "Johnnyyyyy",
-   LoadingTitle = "Delta Interface",
-   LoadingSubtitle = "by YourName",
+   Name = "AniPixels",
+   LoadingTitle = "Loading Script Hub...",
+   LoadingSubtitle = "by Average",
+   ConfigurationSaving = { Enabled = false }
 })
 
-local Tab = Window:CreateTab("Main Features") -- Creates a tab
+-- 2. Create the Tab
+local MainTab = Window:CreateTab("Automation", 4483362458) -- Icon ID optional
 
--- This creates a Toggle
-local Toggle = Tab:CreateToggle({
-   Name = "Infinite Jump",
+-- Function to find units
+local function getMergeableUnit()
+    local counts = {}
+    for _, item in pairs(inventory:GetChildren()) do
+        local name = item.Name
+        counts[name] = (counts[name] or 0) + 1
+        if counts[name] >= 4 then
+            return name
+        end
+    end
+    return nil
+end
+
+-- Function to perform the merge
+local function runMergeProcess()
+    local unitName = getMergeableUnit()
+    if unitName then
+        local tpArgs = {[1] = CFrame.new(311.89, 34.42, -190.07) * CFrame.Angles(0, 1.57, 0)}
+        ReplicatedStorage.Events.Teleport:FireServer(unpack(tpArgs))
+        task.wait(1)
+
+        local squadArgs = {[1] = {["1"] = unitName, ["2"] = unitName, ["3"] = unitName, ["4"] = unitName}}
+        ReplicatedStorage.Events.SquadUpdate:FireServer(unpack(squadArgs))
+        task.wait(0.5)
+
+        mergeRemote:FireServer()
+        Rayfield:Notify({Title = "Success", Content = "Merged: " .. unitName, Duration = 3})
+    end
+end
+
+-- 3. Add UI Elements
+MainTab:CreateButton({
+   Name = "Merge Once",
+   Callback = function()
+      runMergeProcess()
+   end,
+})
+
+MainTab:CreateToggle({
+   Name = "Auto-Merge Loop",
    CurrentValue = false,
+   Flag = "Toggle1", 
    Callback = function(Value)
-      -- This code runs when you flip the switch
-      _G.InfJump = Value
-      game:GetService("UserInputService").JumpRequest:Connect(function()
-          if _G.InfJump then
-              game:GetService"Players".LocalPlayer.Character:FindFirstChildOfClass('Humanoid'):ChangeState("Jumping")
-          end
-      end)
+      _G.AutoMerge = Value
+      while _G.AutoMerge do
+         runMergeProcess()
+         task.wait(5) -- Checks every 5 seconds
+      end
    end,
 })
