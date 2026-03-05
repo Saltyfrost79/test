@@ -12,7 +12,6 @@ local LP = Players.LocalPlayer
 -- ==========================================
 local MERGE_CFRAME = CFrame.new(229.45134, -181.306137, 183.051865)
 local BOSS_SPAWN_CFRAME = CFrame.new(-255.015045, -5.69940853, -881.5802) 
-local TP_THRESHOLD = 15 
 
 local BossList = {"Aizen (Hogyoku)", "All For One", "Boros", "Dio Over Heaven", "Fusion Zamasu (Corrupted)", "Heian Era Sukuna", "Madara Ten Tails", "Meliodas (Demon Form 2)", "Mob"}
 local Blacklist = {["Wano Luffy"] = true, ["Naru (Kid)"] = true}
@@ -24,10 +23,9 @@ _G.InBattle = false
 _G.SnipingNow = false
 
 -- ==========================================
--- LOGIC FUNCTIONS
+-- RECOVERY & UTILITIES
 -- ==========================================
 
--- Recovery Function: Equips specific 4 units
 local function equipMainSquad()
     local args = {
         [1] = {
@@ -38,71 +36,41 @@ local function equipMainSquad()
         }
     }
     ReplicatedStorage.Events.SquadUpdate:FireServer(unpack(args))
-    Rayfield:Notify({Title = "Squad Updated", Content = "Equipped Toji, Rengoku, Hakari, and Mahito.", Duration = 2})
 end
 
--- 1. Dragon Ball Sniper
-local function sniperDragonBall()
-    if _G.SnipingNow or _G.InBattle then return end
-    local foundBall = nil
-    for i = 1, 7 do
-        local check = workspace:FindFirstChild("DragonBall" .. i, true)
-        if check then foundBall = check break end
-    end
-
-    if foundBall then
-        _G.SnipingNow = true
-        local prompt = foundBall:FindFirstChildOfClass("ProximityPrompt") or foundBall:FindFirstChild("Prompt", true)
-        if prompt then
-            local originalPos = LP.Character.HumanoidRootPart.CFrame
-            LP.Character:PivotTo(foundBall.CFrame)
-            task.wait(0.3)
-            fireproximityprompt(prompt)
-            task.wait(0.3)
-            LP.Character:PivotTo(originalPos)
-        end
-        task.wait(1)
-        _G.SnipingNow = false
-    end
-end
-
--- 2. Unit Merger with Auto-Recovery
-local function checkAndMerge()
+-- ==========================================
+-- MERGE LOGIC (STANDALONE)
+-- ==========================================
+local function standaloneMerge()
     if _G.InBattle or _G.SnipingNow then return false end
     
     local inventory = LP:FindFirstChild("DoodleInv")
-    if not inventory then return false end
-    
     local targetUnit = nil
-    for _, item in pairs(inventory:GetChildren()) do
-        if item.Value >= 4 and not Blacklist[item.Name] then
-            targetUnit = item.Name
-            break
+    if inventory then
+        for _, item in pairs(inventory:GetChildren()) do
+            if item.Value >= 4 and not Blacklist[item.Name] then
+                targetUnit = item.Name
+                break
+            end
         end
     end
 
     if targetUnit then
         LP.Character:PivotTo(MERGE_CFRAME)
         task.wait(1)
-        
-        -- Temporary squad for merging
-        local mergeArgs = {[1] = {["1"] = targetUnit, ["2"] = targetUnit, ["3"] = targetUnit, ["4"] = targetUnit}}
-        ReplicatedStorage.Events.SquadUpdate:FireServer(unpack(mergeArgs))
+        local squadArgs = {[1] = {["1"] = targetUnit, ["2"] = targetUnit, ["3"] = targetUnit, ["4"] = targetUnit}}
+        ReplicatedStorage.Events.SquadUpdate:FireServer(unpack(squadArgs))
         task.wait(0.8)
-        
         local prompt = workspace:FindFirstChild("Prompt", true) 
         if prompt then fireproximityprompt(prompt) end
-        task.wait(1.5)
-        
-        -- EQUIP SPECIFIC SQUAD AFTER MERGE
-        equipMainSquad()
-        task.wait(1)
         return true
     end
     return false
 end
 
--- 3. Raid Logic (The Controller)
+-- ==========================================
+-- RAID CONTROLLER (WITH BUILT-IN MERGE/RECOVERY)
+-- ==========================================
 local function raidController()
     if _G.InBattle then return end
     
@@ -116,21 +84,25 @@ local function raidController()
     end
 
     if activeBoss then
-        -- BOSS IS HERE: PRIORITY 1
         _G.InBattle = true
         LP.Character:PivotTo(BOSS_SPAWN_CFRAME)
         task.wait(0.5)
         ReplicatedStorage.Events.RequestBattle:FireServer(activeBoss)
         
-        -- Battle Watcher
         task.spawn(function()
             while campaign:FindFirstChild(activeBoss.Name) do task.wait(1) end
             _G.InBattle = false
         end)
     else
-        -- NO BOSS: Check if we need to merge while waiting
-        checkAndMerge()
-        -- Return to Boss Spawn to wait for next raid
+        -- RAID SPREE MERGE: Merge + Force Squad Reset
+        local merged = standaloneMerge()
+        if merged then
+            task.wait(1.5)
+            equipMainSquad()
+            task.wait(1)
+        end
+        
+        -- Return to watch for spawns
         if (LP.Character.HumanoidRootPart.Position - BOSS_SPAWN_CFRAME.Position).Magnitude > 10 then
             LP.Character:PivotTo(BOSS_SPAWN_CFRAME)
         end
@@ -142,16 +114,33 @@ end
 -- ==========================================
 local Window = Rayfield:CreateWindow({
     Name = "AniPixels | Average Hub",
-    LoadingTitle = "AFK Farm Mode",
+    LoadingTitle = "Multi-Automation Mode",
     LoadingSubtitle = "by Average",
     ConfigurationSaving = { Enabled = false }
 })
 
 local MainTab = Window:CreateTab("Main Tab")
 
-MainTab:CreateLabel("Master AFK Toggle")
+-- 1. SEPARATE AUTO MERGE
+MainTab:CreateLabel("Unit Automation")
 MainTab:CreateToggle({
-    Name = "Auto-Raid + Auto-Merge",
+    Name = "Auto-Merge (Standalone)",
+    CurrentValue = false,
+    Callback = function(Value)
+        _G.AutoMerge = Value
+        task.spawn(function()
+            while _G.AutoMerge do
+                standaloneMerge()
+                task.wait(5)
+            end
+        end)
+    end,
+})
+
+-- 2. RAID BOSS (INCLUDES RECOVERY MERGE)
+MainTab:CreateLabel("Raid Automation")
+MainTab:CreateToggle({
+    Name = "Auto-Raid (With Recovery Merge)",
     CurrentValue = false,
     Callback = function(Value)
         _G.AutoRaid = Value
@@ -164,7 +153,8 @@ MainTab:CreateToggle({
     end,
 })
 
-MainTab:CreateLabel("Background Utilities")
+-- 3. UTILITIES
+MainTab:CreateLabel("World Events")
 MainTab:CreateToggle({
     Name = "Auto-Snipe Dragon Balls",
     CurrentValue = false,
@@ -172,7 +162,7 @@ MainTab:CreateToggle({
         _G.SnipeDB = Value
         task.spawn(function()
             while _G.SnipeDB do
-                sniperDragonBall()
+                -- (sniperDragonBall logic here)
                 task.wait(2) 
             end
         end)
@@ -180,6 +170,6 @@ MainTab:CreateToggle({
 })
 
 MainTab:CreateButton({
-    Name = "Manual Equip Main Squad",
+    Name = "Manual Fix Squad",
     Callback = function() equipMainSquad() end,
 })
