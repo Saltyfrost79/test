@@ -14,7 +14,7 @@ local TP_THRESHOLD = 15
 -- Make sure the names match exactly what you see in the DoodleInv folder.
 local Blacklist = {
     ["Wano Luffy"] = true,
-    ["Naru (kid)"] = true,
+    ["Naru (Kid)"] = true,
     ["Some Other Unit"] = true, -- Example for later
 }
 
