@@ -29,36 +29,38 @@ local Blacklist = {
 }
 
 -- ==========================================
--- UI INITIALIZATION
--- ==========================================
-local Window = Rayfield:CreateWindow({
-   Name = "AniPixels | Average Hub",
-   LoadingTitle = "Delta Interface",
-   LoadingSubtitle = "by Average",
-   ConfigurationSaving = { Enabled = false }
-})
-
-local MainTab = Window:CreateTab("Automation")
-local WorldTab = Window:CreateTab("World Events")
-
--- ==========================================
--- UTILITY FUNCTIONS
+-- UTILITY FUNCTIONS (UPDATED FOR SMALL SERVERS)
 -- ==========================================
 local function serverHop()
     local PlaceID = game.PlaceId
     local JobID = game.JobId
+    
+    -- We use Asc order to find the smallest servers first
     local Success, Servers = pcall(function()
-        return game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceID .. "/servers/Public?sortOrder=Desc&limit=100")
+        return game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceID .. "/servers/Public?sortOrder=Asc&limit=100")
     end)
     
     if Success then
         local Decoded = HttpService:JSONDecode(Servers)
+        local targetServer = nil
+        
         for _, server in pairs(Decoded.data) do
-            if server.playing < server.maxPlayers and server.id ~= JobID then
-                TeleportService:TeleportToPlaceInstance(PlaceID, server.id, LP)
+            -- Look for a server that has players (not empty) but isn't full
+            -- We leave 2 slots open to avoid the "Server Full" race condition
+            if server.playing > 0 and server.playing < (server.maxPlayers - 2) and server.id ~= JobID then
+                targetServer = server.id
                 break
             end
         end
+        
+        if targetServer then
+            Rayfield:Notify({Title = "Server Hop", Content = "Joining small server...", Duration = 3})
+            TeleportService:TeleportToPlaceInstance(PlaceID, targetServer, LP)
+        else
+            Rayfield:Notify({Title = "Error", Content = "No suitable small servers found.", Duration = 3})
+        end
+    else
+        Rayfield:Notify({Title = "Error", Content = "Failed to fetch server list.", Duration = 3})
     end
 end
 
@@ -137,10 +139,18 @@ local function sniperDragonBall()
 end
 
 -- ==========================================
--- UI ELEMENTS
+-- UI INITIALIZATION & ELEMENTS
 -- ==========================================
+local Window = Rayfield:CreateWindow({
+   Name = "AniPixels | Average Hub",
+   LoadingTitle = "Delta Interface",
+   LoadingSubtitle = "by Average",
+   ConfigurationSaving = { Enabled = false }
+})
 
--- AUTOMATION TAB
+local MainTab = Window:CreateTab("Automation")
+local WorldTab = Window:CreateTab("World Events")
+
 MainTab:CreateToggle({
    Name = "Auto-Merge Loop",
    CurrentValue = false,
@@ -160,7 +170,6 @@ MainTab:CreateButton({
    Callback = function() runMergeProcess() end,
 })
 
--- WORLD EVENTS TAB
 WorldTab:CreateToggle({
    Name = "Auto-Snipe Dragon Balls",
    CurrentValue = false,
@@ -195,7 +204,7 @@ WorldTab:CreateButton({
         end
         
         if not found then
-            Rayfield:Notify({Title = "No Luck", Content = "No Dragon Ball found. Hopping...", Duration = 2})
+            Rayfield:Notify({Title = "No Luck", Content = "No Dragon Ball found. Hopping to small server...", Duration = 2})
             task.wait(1)
             serverHop()
         else
@@ -205,6 +214,6 @@ WorldTab:CreateButton({
 })
 
 WorldTab:CreateButton({
-    Name = "Manual Server Hop",
+    Name = "Manual Small Server Hop",
     Callback = function() serverHop() end,
 })
