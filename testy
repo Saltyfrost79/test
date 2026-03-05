@@ -2,26 +2,13 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 
 -- ==========================================
 -- CONFIGURATION
 -- ==========================================
-local MERGE_CFRAME = CFrame.new(229.45134, -181.306137, 183.051865)
 local BOSS_SPAWN_CFRAME = CFrame.new(-255.015045, -5.69940853, -881.5802) --
-
-local DB_LOCATIONS = {
-    CFrame.new(-1.67291641, 79.0576019, 266.863037),
-    CFrame.new(95.8843079, 29.1571198, 5.08903503),
-    CFrame.new(377.109161, 12.3360214, 7.98773193),
-    CFrame.new(196.93129, -216.564728, -54.9656982),
-    CFrame.new(1184.02759, -337.992981, -728.5495), 
-    CFrame.new(676.919922, 12.1649628, -127.206299),
-    CFrame.new(-88.4978256, 12.8059921, -239.257172)
-}
 
 local BossList = {
     "Aizen (Hogyoku)", "All For One", "Boros", "Dio Over Heaven", 
@@ -29,32 +16,19 @@ local BossList = {
     "Meliodas (Demon Form 2)", "Mob"
 }
 
-local Blacklist = {
-    ["Wano Luffy"] = true,
-    ["Naru (Kid)"] = true,
-}
-
 -- ==========================================
--- UI INITIALIZATION
+-- RAID BOSS LOGIC (FIXED)
 -- ==========================================
-local Window = Rayfield:CreateWindow({
-   Name = "AniPixels | Average Hub",
-   LoadingTitle = "Delta Interface",
-   LoadingSubtitle = "All-In-One Hub Ready",
-   ConfigurationSaving = { Enabled = false }
-})
-
-local MainTab = Window:CreateTab("Automation")
-local WorldTab = Window:CreateTab("World Events")
-local RaidTab = Window:CreateTab("Raid Boss")
-
--- ==========================================
--- LOGIC MODULES
--- ==========================================
-
--- 1. Raid Boss Logic
 _G.InBattle = false
+local lastBattleTime = 0
+
 local function startRaidBattle()
+    -- Safety: Reset if stuck in "Battle" for more than 60 seconds
+    if _G.InBattle and (tick() - lastBattleTime) > 60 then
+        _G.InBattle = false
+        print("Battle timed out - Resetting state")
+    end
+
     if _G.InBattle then return end
     
     local campaign = workspace:FindFirstChild("Campaign")
@@ -62,49 +36,56 @@ local function startRaidBattle()
 
     for _, bossName in pairs(BossList) do
         local bossModel = campaign:FindFirstChild(bossName)
+        
         if bossModel and bossModel:IsA("Model") then
             _G.InBattle = true
+            lastBattleTime = tick()
             
-            -- TP to the shared spawn point
+            -- TP to the spawn point
             LP.Character:PivotTo(BOSS_SPAWN_CFRAME)
-            task.wait(0.3)
+            task.wait(0.5)
             
-            -- Battle Event
-            ReplicatedStorage.Events.RequestBattle:FireServer(bossModel)
-            Rayfield:Notify({Title = "Raid", Content = "Battling: " .. bossName, Duration = 3})
+            -- Fire Battle Request
+            local args = {[1] = bossModel}
+            ReplicatedStorage.Events.RequestBattle:FireServer(unpack(args))
+            
+            Rayfield:Notify({Title = "Raid Boss", Content = "Engaging " .. bossName, Duration = 3})
+            
+            -- Monitor if boss disappears (Death check)
+            task.spawn(function()
+                while _G.InBattle do
+                    task.wait(1)
+                    if not campaign:FindFirstChild(bossName) then
+                        _G.InBattle = false
+                        print("Boss disappeared - Ready for next")
+                    end
+                end
+            end)
             break
         end
     end
 end
 
--- Monitor Battle Result Remote
+-- Fallback: Manual remote listener
 ReplicatedStorage.Events.BattleResult.OnClientEvent:Connect(function(result)
     if result == "Won" then
         _G.InBattle = false
+        print("Received Victory Remote")
     end
 end)
 
--- 2. Utility: Server Hop
-local function serverHop()
-    local Success, Servers = pcall(function()
-        return game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
-    end)
-    if Success then
-        local Decoded = HttpService:JSONDecode(Servers)
-        for _, server in pairs(Decoded.data) do
-            if server.playing > 0 and server.playing < (server.maxPlayers - 2) and server.id ~= game.JobId then
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LP)
-                break
-            end
-        end
-    end
-end
-
 -- ==========================================
--- UI ELEMENTS
+-- UI SETUP
 -- ==========================================
+local Window = Rayfield:CreateWindow({
+   Name = "AniPixels | Average Hub",
+   LoadingTitle = "Delta Interface",
+   LoadingSubtitle = "Raid Fix v1.3",
+   ConfigurationSaving = { Enabled = false }
+})
 
--- RAID TAB
+local RaidTab = Window:CreateTab("Raid Boss")
+
 RaidTab:CreateToggle({
    Name = "Auto-Raid Loop",
    CurrentValue = false,
@@ -113,43 +94,16 @@ RaidTab:CreateToggle({
       task.spawn(function()
           while _G.AutoRaid do
              startRaidBattle()
-             task.wait(2)
+             task.wait(3) 
           end
       end)
    end,
 })
 
--- WORLD TAB (Sniper)
-WorldTab:CreateToggle({
-   Name = "Auto-Snipe Dragon Balls",
-   CurrentValue = false,
-   Callback = function(Value)
-      _G.SnipeDB = Value
-      task.spawn(function()
-          while _G.SnipeDB do
-             -- Dragon Ball Snipe Logic (matching your DragonBall1-7 assets)
-             task.wait(1)
-          end
-      end)
-   end,
-})
-
-WorldTab:CreateButton({
-    Name = "Scan & Small Server Hop",
-    Callback = function() serverHop() end,
-})
-
--- MAIN TAB (Merger)
-MainTab:CreateToggle({
-   Name = "Auto-Merge Loop",
-   CurrentValue = false,
-   Callback = function(Value)
-      _G.AutoMerge = Value
-      task.spawn(function()
-          while _G.AutoMerge do
-             -- runMergeProcess() logic
-             task.wait(5)
-          end
-      end)
-   end,
+RaidTab:CreateButton({
+    Name = "Force Reset Battle State",
+    Callback = function()
+        _G.InBattle = false
+        Rayfield:Notify({Title = "System", Content = "Battle state reset to Idle", Duration = 2})
+    end,
 })
