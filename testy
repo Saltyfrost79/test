@@ -15,9 +15,6 @@ local TP_THRESHOLD = 15
 local Blacklist = {
     ["Wano Luffy"] = true,
     ["Naru (kid)"] = true,
-    ["Giant Naru (kid)"] = true,
-    ["Mega Naru (kid)"] = true,
-    ["Titan Naru (kid)"] = true,
     ["Some Other Unit"] = true, -- Example for later
 }
 
