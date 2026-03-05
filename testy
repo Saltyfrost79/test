@@ -4,6 +4,23 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 
+-- ==========================================
+-- SETTINGS & BLACKLIST
+-- ==========================================
+local MERGE_CFRAME = CFrame.new(227.596115, -180.579788, 182.112259, 0, 0, 1, 0, 1, -0, -1, 0, 0)
+local TP_THRESHOLD = 15 
+
+-- Add any units you want to SAVE here! 
+-- Make sure the names match exactly what you see in the DoodleInv folder.
+local Blacklist = {
+    ["Wano Luffy"] = true,
+    ["Naru (kid)"] = true,
+    ["Some Other Unit"] = true, -- Example for later
+}
+
+-- ==========================================
+-- UI SETUP
+-- ==========================================
 local Window = Rayfield:CreateWindow({
    Name = "AniPixels | Average Hub",
    LoadingTitle = "Delta Interface",
@@ -12,10 +29,6 @@ local Window = Rayfield:CreateWindow({
 })
 
 local MainTab = Window:CreateTab("Automation")
-
--- CONFIGURATION
-local MERGE_CFRAME = CFrame.new(227.596115, -180.579788, 182.112259, 0, 0, 1, 0, 1, -0, -1, 0, 0)
-local TP_THRESHOLD = 15 -- Distance in studs; if further than this, it will TP
 
 -- Helper to find the prompt
 local function getMergePrompt()
@@ -29,19 +42,19 @@ local function runMergeProcess()
     local inventory = LP:WaitForChild("DoodleInv")
     local targetUnit = nil
 
-    -- 1. Check for stack of 4+
+    -- 1. Check for stack of 4+ while checking the Blacklist
     for _, item in pairs(inventory:GetChildren()) do
-        if item.Value >= 4 then
+        -- This line checks if the unit name is NOT in our Blacklist table
+        if item.Value >= 4 and not Blacklist[item.Name] then
             targetUnit = item.Name
             break
         end
     end
 
     if targetUnit then
-        -- 2. SMART TELEPORT: Only TP if you are too far away
+        -- 2. SMART TELEPORT
         local distance = (root.Position - MERGE_CFRAME.Position).Magnitude
         if distance > TP_THRESHOLD then
-            print("Too far from station. Teleporting...")
             char:PivotTo(MERGE_CFRAME)
             ReplicatedStorage.Events.Teleport:FireServer(MERGE_CFRAME)
             task.wait(1.2)
@@ -57,12 +70,12 @@ local function runMergeProcess()
         if prompt then
             fireproximityprompt(prompt)
             Rayfield:Notify({Title = "Merged", Content = "Successfully processed: " .. targetUnit, Duration = 2})
-            return true -- Success
-        else
-            Rayfield:Notify({Title = "Error", Content = "Prompt not in range!", Duration = 3})
+            return true 
         end
     else
-        return false -- Nothing found
+        -- This prints to F9 console if it skipped something because of the blacklist
+        print("No mergeable units found (or they are blacklisted).")
+        return false 
     end
 end
 
@@ -70,10 +83,7 @@ end
 MainTab:CreateButton({
    Name = "Manual Merge (Single)",
    Callback = function()
-      local success = runMergeProcess()
-      if not success then
-          Rayfield:Notify({Title = "Notice", Content = "Nothing found to merge.", Duration = 2})
-      end
+      runMergeProcess()
    end,
 })
 
@@ -86,10 +96,8 @@ MainTab:CreateToggle({
           while _G.AutoMerge do
              local merged = runMergeProcess()
              if not merged then
-                 -- If nothing was found, wait a bit longer before checking again
                  task.wait(5) 
              else
-                 -- Wait for the game's animation/cooldown
                  task.wait(3) 
              end
           end
