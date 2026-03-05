@@ -3,12 +3,16 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 
 -- ==========================================
 -- CONFIGURATION
 -- ==========================================
+local MERGE_CFRAME = CFrame.new(229.45134, -181.306137, 183.051865, -0.999990702, 0, -0.00440241303, 0, 1, 0, 0.00440241303, 0, -0.999990702)
+local TP_THRESHOLD = 15 
+
 local DB_LOCATIONS = {
     CFrame.new(-1.67291641, 79.0576019, 266.863037),
     CFrame.new(95.8843079, 29.1571198, 5.08903503),
@@ -19,8 +23,13 @@ local DB_LOCATIONS = {
     CFrame.new(-88.4978256, 12.8059921, -239.257172)
 }
 
+local Blacklist = {
+    ["Wano Luffy"] = true,
+    ["Naru (Kid)"] = true,
+}
+
 -- ==========================================
--- UI SETUP
+-- UI INITIALIZATION
 -- ==========================================
 local Window = Rayfield:CreateWindow({
    Name = "AniPixels | Average Hub",
@@ -29,10 +38,11 @@ local Window = Rayfield:CreateWindow({
    ConfigurationSaving = { Enabled = false }
 })
 
+local MainTab = Window:CreateTab("Automation")
 local WorldTab = Window:CreateTab("World Events")
 
 -- ==========================================
--- SERVER HOP FUNCTION
+-- UTILITY FUNCTIONS
 -- ==========================================
 local function serverHop()
     local PlaceID = game.PlaceId
@@ -42,7 +52,7 @@ local function serverHop()
     end)
     
     if Success then
-        local Decoded = game:GetService("HttpService"):JSONDecode(Servers)
+        local Decoded = HttpService:JSONDecode(Servers)
         for _, server in pairs(Decoded.data) do
             if server.playing < server.maxPlayers and server.id ~= JobID then
                 TeleportService:TeleportToPlaceInstance(PlaceID, server.id, LP)
@@ -53,12 +63,49 @@ local function serverHop()
 end
 
 -- ==========================================
--- DRAGON BALL LOGIC
+-- AUTOMATION: UNIT MERGER
+-- ==========================================
+local function runMergeProcess()
+    local char = LP.Character or LP.CharacterAdded:Wait()
+    local root = char:WaitForChild("HumanoidRootPart")
+    local inventory = LP:WaitForChild("DoodleInv")
+    local targetUnit = nil
+
+    for _, item in pairs(inventory:GetChildren()) do
+        if item.Value >= 4 and not Blacklist[item.Name] then
+            targetUnit = item.Name
+            break
+        end
+    end
+
+    if targetUnit then
+        local distance = (root.Position - MERGE_CFRAME.Position).Magnitude
+        if distance > TP_THRESHOLD then
+            char:PivotTo(MERGE_CFRAME)
+            ReplicatedStorage.Events.Teleport:FireServer(MERGE_CFRAME)
+            task.wait(1.2)
+        end
+
+        local squadArgs = {[1] = {["1"] = targetUnit, ["2"] = targetUnit, ["3"] = targetUnit, ["4"] = targetUnit}}
+        ReplicatedStorage.Events.SquadUpdate:FireServer(unpack(squadArgs))
+        task.wait(0.8)
+
+        local prompt = workspace:FindFirstChild("Prompt", true) 
+        if prompt then
+            fireproximityprompt(prompt)
+            Rayfield:Notify({Title = "Merged", Content = "Processed: " .. targetUnit, Duration = 2})
+            return true 
+        end
+    end
+    return false
+end
+
+-- ==========================================
+-- WORLD EVENTS: DB SNIPER
 -- ==========================================
 local function sniperDragonBall()
     if _G.SnipingNow then return end
-
-    -- Based on your screenshot, names are DragonBall1, DragonBall2, etc.
+    
     local foundBall = nil
     for i = 1, 7 do
         local name = "DragonBall" .. i
@@ -80,7 +127,7 @@ local function sniperDragonBall()
             fireproximityprompt(prompt)
             task.wait(0.2)
             LP.Character:PivotTo(originalPos)
-            Rayfield:Notify({Title = "Sniper", Content = "Collected " .. foundBall.Name, Duration = 5})
+            Rayfield:Notify({Title = "Sniper", Content = "Sniped " .. foundBall.Name, Duration = 5})
         end
         task.wait(2)
         _G.SnipingNow = false
@@ -93,6 +140,27 @@ end
 -- UI ELEMENTS
 -- ==========================================
 
+-- AUTOMATION TAB
+MainTab:CreateToggle({
+   Name = "Auto-Merge Loop",
+   CurrentValue = false,
+   Callback = function(Value)
+      _G.AutoMerge = Value
+      task.spawn(function()
+          while _G.AutoMerge do
+             local merged = runMergeProcess()
+             task.wait(merged and 3 or 5)
+          end
+      end)
+   end,
+})
+
+MainTab:CreateButton({
+   Name = "Manual Merge (Single)",
+   Callback = function() runMergeProcess() end,
+})
+
+-- WORLD EVENTS TAB
 WorldTab:CreateToggle({
    Name = "Auto-Snipe Dragon Balls",
    CurrentValue = false,
@@ -101,32 +169,33 @@ WorldTab:CreateToggle({
       task.spawn(function()
           while _G.SnipeDB do
              sniperDragonBall()
-             task.wait(1)
+             task.wait(1) 
           end
       end)
    end,
 })
 
 WorldTab:CreateButton({
-    Name = "Scan & Hop (If None Found)",
+    Name = "Scan Spawns & Server Hop",
     Callback = function()
         local char = LP.Character
+        if not char then return end
         local originalPos = char.HumanoidRootPart.CFrame
-        local foundAny = false
+        local found = false
         
-        Rayfield:Notify({Title = "Scanning", Content = "Checking all spawns...", Duration = 3})
+        Rayfield:Notify({Title = "Scanning", Content = "Checking all locations...", Duration = 3})
         
         for _, loc in pairs(DB_LOCATIONS) do
             char:PivotTo(loc)
             task.wait(0.5)
             if sniperDragonBall() then 
-                foundAny = true 
+                found = true 
                 break 
             end
         end
         
-        if not foundAny then
-            Rayfield:Notify({Title = "Scanning", Content = "No Dragon Ball found. Hopping servers...", Duration = 3})
+        if not found then
+            Rayfield:Notify({Title = "No Luck", Content = "No Dragon Ball found. Hopping...", Duration = 2})
             task.wait(1)
             serverHop()
         else
