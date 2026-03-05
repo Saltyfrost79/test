@@ -7,7 +7,7 @@ local LP = Players.LocalPlayer
 -- ==========================================
 -- SETTINGS & BLACKLIST
 -- ==========================================
-local MERGE_CFRAME = CFrame.new(227.596115, -180.579788, 182.112259, 0, 0, 1, 0, 1, -0, -1, 0, 0)
+local MERGE_CFRAME = CFrame.new(229.45134, -181.306137, 183.051865, -0.999990702, 0, -0.00440241303, 0, 1, 0, 0.00440241303, 0, -0.999990702)
 local TP_THRESHOLD = 15 
 
 -- Add any units you want to SAVE here! 
