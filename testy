@@ -13,11 +13,23 @@ local Window = Rayfield:CreateWindow({
 
 local MainTab = Window:CreateTab("Automation")
 
+-- CONFIGURATION
+local MERGE_CFRAME = CFrame.new(227.596115, -180.579788, 182.112259, 0, 0, 1, 0, 1, -0, -1, 0, 0)
+local TP_THRESHOLD = 15 -- Distance in studs; if further than this, it will TP
+
+-- Helper to find the prompt
+local function getMergePrompt()
+    return workspace:FindFirstChild("Prompt", true) 
+end
+
+-- Core Logic Function
 local function runMergeProcess()
+    local char = LP.Character or LP.CharacterAdded:Wait()
+    local root = char:WaitForChild("HumanoidRootPart")
     local inventory = LP:WaitForChild("DoodleInv")
     local targetUnit = nil
 
-    -- 1. Check for a stack of 4
+    -- 1. Check for stack of 4+
     for _, item in pairs(inventory:GetChildren()) do
         if item.Value >= 4 then
             targetUnit = item.Name
@@ -26,45 +38,60 @@ local function runMergeProcess()
     end
 
     if targetUnit then
-        -- 2. Teleport
-        local tpPos = CFrame.new(311.89, 34.42, -190.07) * CFrame.Angles(0, 1.57, 0)
-        LP.Character:PivotTo(tpPos)
-        ReplicatedStorage.Events.Teleport:FireServer(tpPos)
-        task.wait(1.5)
+        -- 2. SMART TELEPORT: Only TP if you are too far away
+        local distance = (root.Position - MERGE_CFRAME.Position).Magnitude
+        if distance > TP_THRESHOLD then
+            print("Too far from station. Teleporting...")
+            char:PivotTo(MERGE_CFRAME)
+            ReplicatedStorage.Events.Teleport:FireServer(MERGE_CFRAME)
+            task.wait(1.2)
+        end
 
-        -- 3. Equip 4 from the stack
-        -- Since they stack, the server usually expects the same name 4 times
-        local squadArgs = {
-            [1] = {
-                ["1"] = targetUnit,
-                ["2"] = targetUnit,
-                ["3"] = targetUnit,
-                ["4"] = targetUnit
-            }
-        }
+        -- 3. EQUIP SQUAD
+        local squadArgs = {[1] = {["1"] = targetUnit, ["2"] = targetUnit, ["3"] = targetUnit, ["4"] = targetUnit}}
         ReplicatedStorage.Events.SquadUpdate:FireServer(unpack(squadArgs))
-        task.wait(1)
+        task.wait(0.8)
 
-        -- 4. Fire Merge
-        local remote = workspace:FindFirstChild("RemoteEvent", true)
-        if remote then
-            remote:FireServer()
-            Rayfield:Notify({Title = "Success", Content = "Merged stack of " .. targetUnit, Duration = 3})
+        -- 4. TRIGGER MERGE
+        local prompt = getMergePrompt()
+        if prompt then
+            fireproximityprompt(prompt)
+            Rayfield:Notify({Title = "Merged", Content = "Successfully processed: " .. targetUnit, Duration = 2})
+            return true -- Success
+        else
+            Rayfield:Notify({Title = "Error", Content = "Prompt not in range!", Duration = 3})
         end
     else
-        Rayfield:Notify({Title = "Error", Content = "No stacks of 4 found!", Duration = 3})
+        return false -- Nothing found
     end
 end
 
+-- UI BUTTONS
+MainTab:CreateButton({
+   Name = "Manual Merge (Single)",
+   Callback = function()
+      local success = runMergeProcess()
+      if not success then
+          Rayfield:Notify({Title = "Notice", Content = "Nothing found to merge.", Duration = 2})
+      end
+   end,
+})
+
 MainTab:CreateToggle({
-   Name = "Auto-Merge Stacks",
+   Name = "Auto-Merge Loop",
    CurrentValue = false,
    Callback = function(Value)
       _G.AutoMerge = Value
       task.spawn(function()
           while _G.AutoMerge do
-             runMergeProcess()
-             task.wait(10)
+             local merged = runMergeProcess()
+             if not merged then
+                 -- If nothing was found, wait a bit longer before checking again
+                 task.wait(5) 
+             else
+                 -- Wait for the game's animation/cooldown
+                 task.wait(3) 
+             end
           end
       end)
    end,
