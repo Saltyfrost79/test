@@ -4,23 +4,16 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 
--- ==========================================
--- SETTINGS & BLACKLIST
--- ==========================================
 local MERGE_CFRAME = CFrame.new(229.45134, -181.306137, 183.051865, -0.999990702, 0, -0.00440241303, 0, 1, 0, 0.00440241303, 0, -0.999990702)
 local TP_THRESHOLD = 15 
 
--- Add any units you want to SAVE here! 
--- Make sure the names match exactly what you see in the DoodleInv folder.
 local Blacklist = {
     ["Wano Luffy"] = true,
     ["Naru (Kid)"] = true,
     ["Some Other Unit"] = true, -- Example for later
 }
 
--- ==========================================
--- UI SETUP
--- ==========================================
+-- UI
 local Window = Rayfield:CreateWindow({
    Name = "AniPixels | Average Hub",
    LoadingTitle = "Delta Interface",
@@ -35,16 +28,15 @@ local function getMergePrompt()
     return workspace:FindFirstChild("Prompt", true) 
 end
 
--- Core Logic Function
 local function runMergeProcess()
     local char = LP.Character or LP.CharacterAdded:Wait()
     local root = char:WaitForChild("HumanoidRootPart")
     local inventory = LP:WaitForChild("DoodleInv")
     local targetUnit = nil
 
-    -- 1. Check for stack of 4+ while checking the Blacklist
+    -- Check stack of 4+ while checking the Blacklist
     for _, item in pairs(inventory:GetChildren()) do
-        -- This line checks if the unit name is NOT in our Blacklist table
+        -- if unit name is NOT in our Blacklist table
         if item.Value >= 4 and not Blacklist[item.Name] then
             targetUnit = item.Name
             break
@@ -52,7 +44,7 @@ local function runMergeProcess()
     end
 
     if targetUnit then
-        -- 2. SMART TELEPORT
+        --TELEPORT
         local distance = (root.Position - MERGE_CFRAME.Position).Magnitude
         if distance > TP_THRESHOLD then
             char:PivotTo(MERGE_CFRAME)
@@ -60,12 +52,12 @@ local function runMergeProcess()
             task.wait(1.2)
         end
 
-        -- 3. EQUIP SQUAD
+        --EQUIP SQUAD
         local squadArgs = {[1] = {["1"] = targetUnit, ["2"] = targetUnit, ["3"] = targetUnit, ["4"] = targetUnit}}
         ReplicatedStorage.Events.SquadUpdate:FireServer(unpack(squadArgs))
         task.wait(0.8)
 
-        -- 4. TRIGGER MERGE
+        --TRIGGER MERGE
         local prompt = getMergePrompt()
         if prompt then
             fireproximityprompt(prompt)
