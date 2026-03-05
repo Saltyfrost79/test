@@ -2,32 +2,25 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
 
 -- ==========================================
--- CONFIGURATION & BLACKLIST
+-- CONFIGURATION
 -- ==========================================
-local MERGE_CFRAME = CFrame.new(229.45134, -181.306137, 183.051865, -0.999990702, 0, -0.00440241303, 0, 1, 0, 0.00440241303, 0, -0.999990702)
-local TP_THRESHOLD = 15 
-
 local DB_LOCATIONS = {
-    CFrame.new(-1.67291641, 79.0576019, 266.863037),   -- Loc 1
-    CFrame.new(95.8843079, 29.1571198, 5.08903503),    -- Loc 2
-    CFrame.new(377.109161, 12.3360214, 7.98773193),    -- Loc 3
-    CFrame.new(196.93129, -216.564728, -54.9656982),   -- Loc 4
-    CFrame.new(1184.02759, -337.992981, -728.5495),    -- Loc 5 (UPDATED)
-    CFrame.new(676.919922, 12.1649628, -127.206299),   -- Loc 6
-    CFrame.new(-88.4978256, 12.8059921, -239.257172)   -- Loc 7
-}
-
-local Blacklist = {
-    ["Wano Luffy"] = true,
-    ["Naru (Kid)"] = true,
+    CFrame.new(-1.67291641, 79.0576019, 266.863037),
+    CFrame.new(95.8843079, 29.1571198, 5.08903503),
+    CFrame.new(377.109161, 12.3360214, 7.98773193),
+    CFrame.new(196.93129, -216.564728, -54.9656982),
+    CFrame.new(1184.02759, -337.992981, -728.5495), 
+    CFrame.new(676.919922, 12.1649628, -127.206299),
+    CFrame.new(-88.4978256, 12.8059921, -239.257172)
 }
 
 -- ==========================================
--- UI INITIALIZATION
+-- UI SETUP
 -- ==========================================
 local Window = Rayfield:CreateWindow({
    Name = "AniPixels | Average Hub",
@@ -36,84 +29,62 @@ local Window = Rayfield:CreateWindow({
    ConfigurationSaving = { Enabled = false }
 })
 
-local MainTab = Window:CreateTab("Automation")
 local WorldTab = Window:CreateTab("World Events")
 
 -- ==========================================
--- HELPER FUNCTIONS
+-- SERVER HOP FUNCTION
 -- ==========================================
-local function getMergePrompt()
-    return workspace:FindFirstChild("Prompt", true) 
-end
-
--- ==========================================
--- DRAGON BALL SNIPER LOGIC
--- ==========================================
-local function sniperDragonBall()
-    local char = LP.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+local function serverHop()
+    local PlaceID = game.PlaceId
+    local JobID = game.JobId
+    local Success, Servers = pcall(function()
+        return game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceID .. "/servers/Public?sortOrder=Desc&limit=100")
+    end)
     
-    -- Search for the ball object
-    local ball = workspace:FindFirstChild("Dragon Ball", true) or workspace:FindFirstChild("DragonBall", true)
-
-    if ball and not _G.SnipingNow then
-        _G.SnipingNow = true -- Prevent double-firing
-        local prompt = ball:FindFirstChildOfClass("ProximityPrompt") or ball:FindFirstChild("Prompt", true)
-        
-        if prompt then
-            local originalPos = char.HumanoidRootPart.CFrame
-            
-            -- 1. Stealth TP In
-            char:PivotTo(ball.CFrame)
-            task.wait(0.2) 
-
-            -- 2. Collect
-            fireproximityprompt(prompt)
-            
-            -- 3. Stealth TP Out
-            task.wait(0.2) 
-            char:PivotTo(originalPos)
-            
-            Rayfield:Notify({Title = "Sniper", Content = "Dragon Ball Collected!", Duration = 5})
+    if Success then
+        local Decoded = game:GetService("HttpService"):JSONDecode(Servers)
+        for _, server in pairs(Decoded.data) do
+            if server.playing < server.maxPlayers and server.id ~= JobID then
+                TeleportService:TeleportToPlaceInstance(PlaceID, server.id, LP)
+                break
+            end
         end
-        task.wait(2) -- Wait for ball to despawn
-        _G.SnipingNow = false
     end
 end
 
 -- ==========================================
--- MERGER LOGIC
+-- DRAGON BALL LOGIC
 -- ==========================================
-local function runMergeProcess()
-    local char = LP.Character or LP.CharacterAdded:Wait()
-    local root = char:WaitForChild("HumanoidRootPart")
-    local inventory = LP:WaitForChild("DoodleInv")
-    local targetUnit = nil
+local function sniperDragonBall()
+    if _G.SnipingNow then return end
 
-    for _, item in pairs(inventory:GetChildren()) do
-        if item.Value >= 4 and not Blacklist[item.Name] then
-            targetUnit = item.Name
+    -- Based on your screenshot, names are DragonBall1, DragonBall2, etc.
+    local foundBall = nil
+    for i = 1, 7 do
+        local name = "DragonBall" .. i
+        local check = workspace:FindFirstChild(name, true)
+        if check then
+            foundBall = check
             break
         end
     end
 
-    if targetUnit then
-        local distance = (root.Position - MERGE_CFRAME.Position).Magnitude
-        if distance > TP_THRESHOLD then
-            char:PivotTo(MERGE_CFRAME)
-            ReplicatedStorage.Events.Teleport:FireServer(MERGE_CFRAME)
-            task.wait(1.2)
-        end
-
-        local squadArgs = {[1] = {["1"] = targetUnit, ["2"] = targetUnit, ["3"] = targetUnit, ["4"] = targetUnit}}
-        ReplicatedStorage.Events.SquadUpdate:FireServer(unpack(squadArgs))
-        task.wait(0.8)
-
-        local prompt = getMergePrompt()
+    if foundBall then
+        _G.SnipingNow = true
+        local prompt = foundBall:FindFirstChildOfClass("ProximityPrompt") or foundBall:FindFirstChild("Prompt", true)
+        
         if prompt then
+            local originalPos = LP.Character.HumanoidRootPart.CFrame
+            LP.Character:PivotTo(foundBall.CFrame)
+            task.wait(0.2)
             fireproximityprompt(prompt)
-            return true 
+            task.wait(0.2)
+            LP.Character:PivotTo(originalPos)
+            Rayfield:Notify({Title = "Sniper", Content = "Collected " .. foundBall.Name, Duration = 5})
         end
+        task.wait(2)
+        _G.SnipingNow = false
+        return true
     end
     return false
 end
@@ -122,27 +93,6 @@ end
 -- UI ELEMENTS
 -- ==========================================
 
--- Merger Tab
-MainTab:CreateToggle({
-   Name = "Auto-Merge Loop",
-   CurrentValue = false,
-   Callback = function(Value)
-      _G.AutoMerge = Value
-      task.spawn(function()
-          while _G.AutoMerge do
-             local merged = runMergeProcess()
-             task.wait(merged and 3 or 5)
-          end
-      end)
-   end,
-})
-
-MainTab:CreateButton({
-   Name = "Manual Merge (Single)",
-   Callback = function() runMergeProcess() end,
-})
-
--- Dragon Ball Tab
 WorldTab:CreateToggle({
    Name = "Auto-Snipe Dragon Balls",
    CurrentValue = false,
@@ -151,27 +101,41 @@ WorldTab:CreateToggle({
       task.spawn(function()
           while _G.SnipeDB do
              sniperDragonBall()
-             task.wait(1) 
+             task.wait(1)
           end
       end)
    end,
 })
 
 WorldTab:CreateButton({
-    Name = "Force Scan All Spawnpoints",
+    Name = "Scan & Hop (If None Found)",
     Callback = function()
         local char = LP.Character
-        if not char then return end
         local originalPos = char.HumanoidRootPart.CFrame
+        local foundAny = false
         
-        Rayfield:Notify({Title = "Scanning", Content = "Checking all 7 locations...", Duration = 3})
+        Rayfield:Notify({Title = "Scanning", Content = "Checking all spawns...", Duration = 3})
         
-        for i, loc in pairs(DB_LOCATIONS) do
+        for _, loc in pairs(DB_LOCATIONS) do
             char:PivotTo(loc)
-            task.wait(0.5) -- Give time for ball to load if present
+            task.wait(0.5)
+            if sniperDragonBall() then 
+                foundAny = true 
+                break 
+            end
         end
         
-        char:PivotTo(originalPos)
-        Rayfield:Notify({Title = "Scan Complete", Content = "Back to original position.", Duration = 2})
+        if not foundAny then
+            Rayfield:Notify({Title = "Scanning", Content = "No Dragon Ball found. Hopping servers...", Duration = 3})
+            task.wait(1)
+            serverHop()
+        else
+            char:PivotTo(originalPos)
+        end
     end,
+})
+
+WorldTab:CreateButton({
+    Name = "Manual Server Hop",
+    Callback = function() serverHop() end,
 })
